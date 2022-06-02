@@ -5,8 +5,11 @@ Simple Replacement for the ASSIMP Library's Old 'assimp-viewer' App for Viewing 
 
 ```diff
 + This program is free and open source software (FOSS)  
-```
-![](https://raw.githubusercontent.com/jstrom2002/3DModelViewer/main/screenshots/ss1.jpg)
+```  
+<br>
+
+![](https://raw.githubusercontent.com/jstrom2002/3DModelViewer/main/screenshots/ss1.jpg)  
+
 
 ## About  
 This app is a simple model viewer for 3D models imported using the ASSIMP library.  It is intended to provide a way to efficiently view any arbitrary model using a very simple raster renderer.   
