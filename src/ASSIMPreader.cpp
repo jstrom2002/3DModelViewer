@@ -161,9 +161,6 @@ namespace TDModelView
         if (!aiscene->HasMeshes())
             return;
 
-#ifndef _DEBUG
-#pragma omp parallel for
-#endif
         for (int n = 0; n < aiscene->mNumMeshes; n++){
             std::string msh_name = aiscene->mMeshes[n]->mName.length > 0 ? std::string(aiscene->mMeshes[n]->mName.C_Str()) : "";
             mesh_load_data.emplace(n, ImportMeshAsync(aiscene->mMeshes[n],scene, scene->materials[aiscene->mMeshes[n]->mMaterialIndex],msh_name,this->filepath));
