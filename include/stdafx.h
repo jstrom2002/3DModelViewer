@@ -40,6 +40,11 @@
 #pragma comment(lib, "bz2d.lib")
 #pragma comment(lib, "assimp-vc142-mtd.lib")
 #pragma comment(lib, "glew32d.lib")
+#pragma comment(lib, "IlmImf-2_5_d.lib")
+#pragma comment(lib, "Iex-2_5_d.lib")
+#pragma comment(lib, "IlmThread-2_5_d.lib")
+#pragma comment(lib, "Imath-2_5_d.lib")
+#pragma comment(lib, "Half-2_5_d.lib")
 #pragma comment(lib, "libprotobufd.lib")
 #pragma comment(lib, "zlibd.lib")
 #pragma comment(lib, "tiffd.lib")
@@ -58,6 +63,11 @@
 #pragma comment(lib, "libprotobuf.lib")
 #pragma comment(lib, "assimp-vc142-mt.lib")
 #pragma comment(lib, "glew32.lib")
+#pragma comment(lib, "IlmImf-2_5.lib")
+#pragma comment(lib, "Iex-2_5.lib")
+#pragma comment(lib, "IlmThread-2_5.lib")
+#pragma comment(lib, "Imath-2_5.lib")
+#pragma comment(lib, "Half-2_5.lib")
 #pragma comment(lib, "zlib.lib")
 #pragma comment(lib, "tiff.lib")
 #pragma comment(lib, "webp.lib")
@@ -100,9 +110,10 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+
 namespace TDModelView
 {
-	class EngineBase;
+	struct EngineBase;
 	extern std::shared_ptr<EngineBase> eng;
 	extern std::string errorString;
 }

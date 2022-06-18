@@ -20,6 +20,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include "UI.hpp"
 #include <assimp/material.h>
+#include "tinyddsloader_impl.h"
 
 namespace TDModelView
 {
@@ -57,11 +58,13 @@ namespace TDModelView
 			}
 		}
 	};
-	struct Texture{
+	struct Texture
+	{
 		GLuint id = 0;
 		std::string filepath = "";
 		Texture(){}
 		~Texture(){}
+
 		Texture(cv::Mat& img, std::string filename)
 		{
 			this->filepath = filename;
@@ -90,26 +93,105 @@ namespace TDModelView
 			glGenerateMipmap(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
+
 		Texture(std::string filename, std::string dir) {
 			this->filepath = checkFilepath(filename, dir);
-			if (!std::filesystem::is_regular_file(filepath)) {
+			std::string ext = getExtension(this->filepath);			
+			if (ext != ".dds" && !std::filesystem::is_regular_file(filepath)) {
 				ErrorMessageBox("ERROR! Could not load texture " + filepath);
 				return;
 			}
-			std::string ext = getExtension(this->filepath);
-			cv::Mat img = cv::imread(filename, cv::IMREAD_ANYCOLOR);
-			GLenum format, internalFormat;
+			else if (ext == ".dds")
+			{
+				tinyddsloader::DDSFile dds;
+				auto ret = dds.Load(filepath.c_str());
+				glGenTextures(1, &id);
+				if (tinyddsloader::Result::Success != ret || !tinyDDS::LoadGLTexture(id, dds)) {
+					glDeleteTextures(1, &id);
+					ErrorMessageBox("Failed to load .dds file " + filepath);
+				}
+				return;
+			}
+
+			cv::Mat img = cv::imread(filename, -1);
+			GLenum format = GL_RGB;
+			GLenum internalFormat = GL_RGB;
+			GLenum dataType = GL_UNSIGNED_BYTE;
 			if (img.empty())
 				return;
 			cv::flip(img, img, 0);
-			if (img.channels() == 3) {
-				cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
-				format = internalFormat = GL_RGB;
+			switch (img.depth()) {
+			case CV_8U:
+				if (img.channels() == 1) {
+					cv::cvtColor(img, img, cv::COLOR_GRAY2RGB);
+					format = internalFormat = GL_RGB;
+				}
+				else if (img.channels() == 3) {
+					cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+					format = internalFormat = GL_RGB;
+				}
+				else if (img.channels() == 4) {
+					cv::cvtColor(img, img, cv::COLOR_BGRA2RGBA);
+					format = internalFormat = GL_RGBA;
+				}
+				dataType = GL_UNSIGNED_BYTE;
+				break;
+			case CV_16U:
+				if (img.channels() == 1) {
+					cv::cvtColor(img, img, cv::COLOR_GRAY2RGB);
+					format = GL_RGB;
+					internalFormat = GL_RGB16;
+				}
+				else if (img.channels() == 3) {
+					cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+					format = GL_RGB;
+					internalFormat = GL_RGB16;
+				}
+				else if (img.channels() == 4) {
+					cv::cvtColor(img, img, cv::COLOR_BGRA2RGBA);
+					format = GL_RGBA;
+					internalFormat = GL_RGBA16;
+				}
+				dataType = GL_UNSIGNED_SHORT;
+				break;
+			case CV_16F:
+				if (img.channels() == 1) {
+					cv::cvtColor(img, img, cv::COLOR_GRAY2RGB);
+					format = GL_RGB;
+					internalFormat = GL_RGB16F;
+				}
+				else if (img.channels() == 3) {
+					cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+					format = GL_RGB;
+					internalFormat = GL_RGB16F;
+				}
+				else if (img.channels() == 4) {
+					cv::cvtColor(img, img, cv::COLOR_BGRA2RGBA);
+					format = GL_RGBA;
+					internalFormat = GL_RGBA16F;
+				}
+				dataType = GL_FLOAT;
+				break;
+			case CV_32F:
+				if (img.channels() == 1) {
+					cv::cvtColor(img, img, cv::COLOR_GRAY2RGB);
+					format = GL_RGB;
+					internalFormat = GL_RGB32F;
+				}
+				else if (img.channels() == 3) {
+					cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+					format = GL_RGB;
+					internalFormat = GL_RGB32F;
+				}
+				else if (img.channels() == 4) {
+					cv::cvtColor(img, img, cv::COLOR_BGRA2RGBA);
+					format = GL_RGBA;
+					internalFormat = GL_RGBA32F;
+				}
+				dataType = GL_FLOAT;
+				break;
 			}
-			else if (img.channels() == 4) {
-				cv::cvtColor(img, img, cv::COLOR_BGRA2RGBA);
-				format = internalFormat = GL_RGBA;
-			}
+
 			int h = img.rows;
 			int w = img.cols;
 			unsigned int sz = img.total() * img.elemSize();
@@ -129,18 +211,21 @@ namespace TDModelView
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, w, h, 0, format, GL_UNSIGNED_BYTE, &data[0]);
+			glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, w, h, 0, format, dataType, &data[0]);
 			glGenerateMipmap(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
-		void clear() {
+
+		void clear() 
+		{
 			if (id)
 				glDeleteTextures(1, &id);
 			filepath = "";
 		}
 	};
 
-	struct Material {
+	struct Material 
+	{
 		bool useBumpMap = false;
 		float alphaCutoff = 0.001f;
 		float bumpMultiplier = 1.0f;
@@ -171,7 +256,7 @@ namespace TDModelView
 			else
 				glBindTexture(GL_TEXTURE_2D, 0);
 		}
-		void setUniforms(Shader* prog) {
+		void setUniforms(Shader* prog, bool useModelNormals) {
 			static const std::vector<std::string> materialUniformNamesNoSpace{
 		   "None",
 		   "Diffuse",
@@ -239,11 +324,17 @@ namespace TDModelView
 			prog->setBool("hasDisplacementMap", HasTexture(aiTextureType_DISPLACEMENT));
 			prog->setBool("useBumpMap", useBumpMap);
 			for (int i = 1; i < aiTextureType_UNKNOWN; ++i)
-				prog->setBool("has" + materialUniformNamesNoSpace[i] + "Map", HasTexture(aiTextureType(i)));
+			{
+				if(i == (int)aiTextureType_NORMALS && useModelNormals)
+					prog->setBool("hasNormalMap", false);
+				else
+					prog->setBool("has" + materialUniformNamesNoSpace[i] + "Map", HasTexture(aiTextureType(i)));
+			}
 		}
 	};
 
-	class TextureBank {
+	class TextureBank 
+	{
 	public:
 		TextureBank() {}
 		~TextureBank() {}
@@ -316,36 +407,45 @@ namespace TDModelView
 				return textures[idx];
 			return Texture();
 		}
+		Texture GenIrradianceMap(Texture tx) {
+
+		}
 	private:
+		Shader* irradianceShader = nullptr;
 		std::vector<Texture> textures;
 	};
 
-    struct Vertex {
+    struct Vertex 
+	{
         glm::vec3 position = glm::vec3(0.0f);
         glm::vec3 uv = glm::vec3(0.0f);
         glm::vec3 normal = glm::vec3(0.0f);
         glm::vec3 tangent = glm::vec3(0.0f);
         glm::vec3 bitangent = glm::vec3(0.0f);
         void Orthonormalize() {
-            normal = normalize(normal);
+            normal = glm::normalize(normal);
             tangent = glm::orthonormalize(tangent, normal);
             if (glm::dot(glm::cross(normal, tangent), bitangent) < 0.0f)
                 tangent = tangent * -1.0f;            
         }
     };
 
-    struct BoundingBox {
+    struct BoundingBox 
+	{
         glm::vec3 bboxMin = glm::vec3(std::numeric_limits<float>::max());
         glm::vec3 bboxMax = glm::vec3(-std::numeric_limits<float>::max());
         glm::vec3 center(){return (bboxMax + bboxMin)*0.5f;}
         glm::vec3 extent(){return (bboxMax - bboxMin)*0.5f;}
+		float minDim() { glm::vec3 ext = extent(); return glm::min(glm::min(ext.x,ext.y), ext.z); }
+		float maxDim() { glm::vec3 ext = extent(); return glm::max(glm::max(ext.x,ext.y), ext.z); }
         void Reset(){
             bboxMin = glm::vec3(std::numeric_limits<float>::max());
             bboxMax = glm::vec3(-std::numeric_limits<float>::max());
         }
     };
 
-    struct Camera {
+    struct Camera 
+	{
         const glm::vec3 WorldFront = glm::vec3(0, 0, 1);
         const glm::vec3 WorldRight = glm::vec3(1, 0, 0);
         const glm::vec3 WorldUp = glm::vec3(0, 1, 0);
@@ -360,8 +460,8 @@ namespace TDModelView
         float angle = 0.0f;
         const float fov = 45.0f;// 45 deg
         const float fov_rad = 0.7853981634f;// 45 deg * (PI/180)
-        const float zNear = 0.1f;
-        const float zFar = 10000.0f;
+        const float zNear = 0.5f;
+        const float zFar = 5000.0f;
         glm::mat4 VP = glm::mat4(1.0f);
         void Rotate(glm::vec3 angle){
             // Convert camera values to range [0,2*PI]
@@ -390,10 +490,12 @@ namespace TDModelView
 		void Update();
     };
 
-    class Mesh {
+    class Mesh 
+	{
     public:
         BoundingBox bbox;//bounds of mesh without any transformation
         GLuint numIndices = 0;
+        GLuint numVertices = 0;
         std::shared_ptr<Material> material = nullptr;
         glm::mat4 modelMatrix = glm::mat4(1.0f);
         GLuint EBO = 0;
@@ -406,7 +508,7 @@ namespace TDModelView
         void reset(){
             indices.clear();
             vertices.clear();
-            numIndices = 0;
+            numIndices = numVertices = 0;
             if (VBO)
                 glDeleteBuffers(1, &VBO);
             if (EBO)
@@ -429,7 +531,8 @@ namespace TDModelView
                     indices[i] = i;
             }
             numIndices = indices.size();//preserve index count for glDrawElements()
-            if (VAO)
+			numVertices = vertices.size();
+			if (VAO)
                 glDeleteVertexArrays(1, &VAO);
             if (VBO)
                 glDeleteBuffers(1, &VBO);
@@ -543,7 +646,8 @@ namespace TDModelView
 			if (vertices.size() == 0)
 				bbox.bboxMin = bbox.bboxMax = glm::vec3(0.0f);
         }
-        private:
+		friend class Scene;
+        protected:
             std::vector<Vertex> vertices;
             std::vector<GLuint> indices;
     };
@@ -551,12 +655,17 @@ namespace TDModelView
 	struct Scene 
 	{
 		BoundingBox bbox;
+		const float minSceneBound = 100.0f;
+		const float maxSceneBound = 1000.0f;
 		std::vector<std::shared_ptr<Mesh>> meshes;
 		std::vector<std::shared_ptr<Material>> materials;
 		Camera m_Camera;
 		glm::vec4 m_Light = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+		unsigned int triCount = 0;
+		unsigned int vertexCount = 0;
 
-		void recalcBounds(){
+		void recalcBounds()
+		{
 			bbox.bboxMin.xyz = glm::vec3(std::numeric_limits<float>::max());
 			bbox.bboxMax.xyz = -glm::vec3(std::numeric_limits<float>::max());
 			for (auto& m : this->meshes){
@@ -572,7 +681,9 @@ namespace TDModelView
 			}
 		}
 
-		void copyToOutput(std::shared_ptr<Scene> scn) {
+		void copyToOutput(std::shared_ptr<Scene> scn) 
+		{
+			triCount = vertexCount = 0;
 			if (scn == nullptr)
 				return;
 
@@ -580,7 +691,18 @@ namespace TDModelView
 			for (int i = 0; i < scn->materials.size(); ++i)
 				this->materials.push_back(scn->materials[i]);
 
-			// Copy meshes.
+			// Calculate dimensions for rescaling models to make them fit scene limits.
+			scn->recalcBounds();
+			float scaleFactor = 1.0f;
+			if (scn->bbox.maxDim() < minSceneBound)
+				scaleFactor = minSceneBound / scn->bbox.minDim();
+			else if (scn->bbox.minDim() > maxSceneBound)
+				scaleFactor = maxSceneBound / scn->bbox.maxDim();
+
+			if (scaleFactor < 1.0e-6f)
+				scaleFactor = 1.0e-6f;
+
+			// Copy meshes, rescaling as necessary.
 			if (scn->meshes.size())
 			{
 				for (auto x : scn->meshes)
@@ -588,11 +710,22 @@ namespace TDModelView
 					// Add dummy material if necessary.
 					if (x->material == nullptr)
 						x->material = std::shared_ptr<Material>();
+
+					// Apply scaling to vertices if necessary.
+					if (scaleFactor != 1.0f)
+					{
+						for (auto vt : x->vertices)						
+							vt.position *= scaleFactor;						
+					}
+
 					x->Load();
+					triCount += x->numIndices;
+					vertexCount += x->numVertices;
 					this->meshes.push_back(x);
 				}
 			}
 
+			triCount /= 3;
 			this->recalcBounds();
 		}
 
@@ -602,16 +735,28 @@ namespace TDModelView
 			meshes.clear();
 			materials.clear();
 			bbox.Reset();
+			triCount = vertexCount = 0;
 		}
 	};
 
 	class Renderer 
 	{
 	public:
+		float ambientLightBlend = 1.0f;
+		float aoStrength = 1.0f;
+		bool cullBackfaces = false;
+		float reflectionStrength = 1.0f;
+		glm::vec2 resolution = glm::vec2(0.0);
+		bool useBumpMaps = false;
+		bool useModelNormals = false;
 		bool wireframeModeOn = false;
 		std::shared_ptr<Texture> hdr_tx = nullptr;
+		std::shared_ptr<Texture> hdr_irradiance_tx = nullptr;
+		std::shared_ptr<Texture> hdr_prefilt_tx = nullptr;
+		std::shared_ptr<Texture> lut_tx = nullptr;
 		~Renderer() {
 			hdr_tx->clear();
+			lut_tx->clear();
 			if (shader->ID)
 				glDeleteProgram(shader->ID);
 		}
@@ -631,7 +776,7 @@ namespace TDModelView
 	struct EngineBase{
 		bool isPopupHovered = false;
 		bool silenceErrors = false;
-		bool windowClose = true;
+		bool windowClose = false;
 		std::string working_directory = "";
 		std::shared_ptr<Renderer> render = nullptr;
 		std::shared_ptr<Scene> scene = nullptr;
@@ -667,12 +812,13 @@ namespace TDModelView
 		static void resize_callback(GLFWwindow* win, int w, int h) {
 			glViewport(0, 0, w, h);
 
-			if (!eng || !eng->ui)
+			if (!eng || !eng->ui || !eng->render || !eng->scene)
 				return;
 
 			eng->ui->window_width = w;
 			eng->ui->window_height = h;
 			eng->ui->fileDialogSize = ImVec2(w * 0.75, h * 0.7);
+			eng->render->resolution = glm::vec2(w, h);
 			eng->scene->m_Camera.Update();
 		}
 
