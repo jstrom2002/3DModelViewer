@@ -1,19 +1,9 @@
 #include "tinyddsloader_impl.h"
+#include "stdafx.h"
 
    using namespace tinyddsloader;
    namespace tinyDDS
    {
-       struct GLSwizzle {
-           GLenum m_r, m_g, m_b, m_a;
-       };
-
-       struct GLFormat {
-           DDSFile::DXGIFormat m_dxgiFormat;
-           GLenum m_type;
-           GLenum m_format;
-           GLSwizzle m_swizzle;
-       };
-
        bool TranslateFormat(DDSFile::DXGIFormat fmt, GLFormat* outFormat) {
            static const GLSwizzle sws[] = {
                {GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA},
