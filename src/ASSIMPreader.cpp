@@ -129,7 +129,7 @@ namespace TDModelView
                     vertex.tangent = glm::vec3(m->mTangents[i].x,m->mTangents[i].y,m->mTangents[i].z);
                     vertex.bitangent = glm::vec3(m->mBitangents[i].x,m->mBitangents[i].y,m->mBitangents[i].z);
                 }
-                vertex.Orthonormalize();
+                //vertex.Orthonormalize();
                 mesh->AddVertex(vertex);
             }
         }
@@ -161,6 +161,9 @@ namespace TDModelView
         if (!aiscene->HasMeshes())
             return;
 
+//#ifndef _DEBUG  // TO DO: add back in the openMP impl here, which causes errors and failures
+//#pragma omp parallel for
+//#endif
         for (int n = 0; n < aiscene->mNumMeshes; n++){
             std::string msh_name = aiscene->mMeshes[n]->mName.length > 0 ? std::string(aiscene->mMeshes[n]->mName.C_Str()) : "";
             mesh_load_data.emplace(n, ImportMeshAsync(aiscene->mMeshes[n],scene, scene->materials[aiscene->mMeshes[n]->mMaterialIndex],msh_name,this->filepath));
@@ -214,7 +217,11 @@ namespace TDModelView
         }
     }
     void ASSIMPreader::ImportMaterialTextures(aiMaterial* mMaterial, std::shared_ptr<Material> material){
-        for (int i = 0; i <= int(aiTextureType_UNKNOWN); i++){
+
+        bool usePBR = extension == ".gltf" || extension == ".glb";// this type of model will use PBR workflow textures.
+        bool hMapToNormal = extension == ".obj"; // for whatever reason, ASSIMP registers obj normal maps as 'height maps'
+
+        for (int i = 1; i <= int(aiTextureType_UNKNOWN); i++){
             aiTextureType texType = aiTextureType(i);
             unsigned int useChannel = 0;
             aiString texPath;
@@ -222,31 +229,14 @@ namespace TDModelView
             if (!(mMaterial->GetTexture(aiTextureType(texType), 0, &texPath) == AI_SUCCESS))
                 continue;
 
-            // Interpret material texture data according to filetype. If loading a 
-            // .gltf file, specific ASSIMP texture keys may be used for PBR textures.
-            if ((extension == ".gltf" || extension == ".glb") && ((texType == aiTextureType_DIFFUSE ||
+
+            // Interpret material texture data according to filetype.
+            if (usePBR && ((texType == aiTextureType_DIFFUSE ||
                 texType == aiTextureType_BASE_COLOR) && mMaterial->Get(AI_MATKEY_TEXTURE(
                     aiTextureType_DIFFUSE, 1), texPath) == AI_SUCCESS)) {
                 texType = aiTextureType_BASE_COLOR;
             }
-            else if ((extension == ".gltf" || extension == ".glb") && texType == aiTextureType_AMBIENT_OCCLUSION &&
-                mMaterial->Get(AI_MATKEY_TEXTURE(aiTextureType_UNKNOWN, 0), texPath) == AI_SUCCESS) {
-                useChannel = 0;
-                texType = aiTextureType_AMBIENT_OCCLUSION;
-            }
-            else if ((extension == ".gltf" || extension == ".glb") && texType == aiTextureType_DIFFUSE_ROUGHNESS &&
-                mMaterial->Get(AI_MATKEY_TEXTURE(aiTextureType_UNKNOWN, 0), texPath) == AI_SUCCESS) {
-                texType = aiTextureType_DIFFUSE_ROUGHNESS;
-                useChannel = 1;
-            }
-            else if ((extension == ".gltf" || extension == ".glb") && texType == aiTextureType_METALNESS &&
-                mMaterial->Get(AI_MATKEY_TEXTURE(aiTextureType_UNKNOWN, 0), texPath) == AI_SUCCESS) {
-                texType = aiTextureType_METALNESS;
-                useChannel = 2;
-            }
-
-            // for wavefront obj we assimp bump = normal map
-            if (extension==".obj" && texType == aiTextureType_HEIGHT)
+            else if (texType == aiTextureType_HEIGHT && hMapToNormal)
                 texType = aiTextureType_NORMALS;
 
             // Check if this is a reference to an embedded texture. If so, find the necessary texture in the scene array. If not, load normally.
@@ -266,14 +256,18 @@ namespace TDModelView
                 if (!std::filesystem::is_regular_file(fpath))
                     continue;
 
-                if (!eng->textureBank->exists(fpath))
+                if (!eng->textureBank->exists(fpath))                
+                    eng->textureBank->add(Texture(fpath,directory));                                                   
+
+                material->AddTexture(eng->textureBank->getPtr(fpath), texType);
+                if (usePBR && texType == aiTextureType_UNKNOWN)
                 {
-                    eng->textureBank->add(Texture(fpath,directory));
-                    material->AddTexture(eng->textureBank->getPtr(fpath), texType);               
-                } // raw data from this texture has been previously loaded
-                else {
-                    // just add reference and associate a new texture type
-                    material->AddTexture(eng->textureBank->getPtr(fpath), texType);
+                    if(!material->HasTexture(aiTextureType_DIFFUSE_ROUGHNESS))
+                        material->AddTexture(eng->textureBank->getPtr(fpath), aiTextureType_DIFFUSE_ROUGHNESS);
+                    if (!material->HasTexture(aiTextureType_AMBIENT_OCCLUSION))
+                        material->AddTexture(eng->textureBank->getPtr(fpath), aiTextureType_AMBIENT_OCCLUSION);
+                    if (!material->HasTexture(aiTextureType_METALNESS))
+                        material->AddTexture(eng->textureBank->getPtr(fpath), aiTextureType_METALNESS);
                 }
             }
         }
@@ -314,7 +308,19 @@ namespace TDModelView
         extension = getExtension(filepath);
         Assimp::Importer importer;
         try {
-            aiscene = (aiScene*)importer.ReadFile(filepath, aiProcessPreset_TargetRealtime_Fast);
+            aiscene = (aiScene*)importer.ReadFile(filepath,
+                aiProcess_CalcTangentSpace |
+                aiProcess_JoinIdenticalVertices |
+                aiProcess_Triangulate |
+                aiProcess_GenUVCoords | 
+                aiProcess_SortByPType |
+                aiProcess_FixInfacingNormals |
+                aiProcess_PreTransformVertices |
+                aiProcess_TransformUVCoords |
+                aiProcess_FindDegenerates | 
+                aiProcess_GenNormals
+                //aiProcess_GenSmoothNormals
+            );
         }
         catch (std::exception e1) {
             ErrorMessageBox("ERROR! Could not load file. " + std::string(e1.what()));

@@ -49,18 +49,30 @@ namespace TDModelView
 		static GLuint Umodmat = glGetUniformLocation(shader->ID, "modelMatrix");
 		static GLuint Umvp = glGetUniformLocation(shader->ID, "modelViewProjection");
 		static GLuint Unmat = glGetUniformLocation(shader->ID, "normalMatrix");
+		static GLuint UuseBmaps = glGetUniformLocation(shader->ID, "useBumpMap");
+		static GLuint UambLightBlend = glGetUniformLocation(shader->ID, "ambientLightBlend");
+		static GLuint UaoStrength = glGetUniformLocation(shader->ID, "aoStrength");
+		static GLuint UreflStr = glGetUniformLocation(shader->ID, "reflectionStrength");
+		static GLuint Uresolution = glGetUniformLocation(shader->ID, "resolution");
 
 
 		// Set uniforms:
+		glUniform1i(UuseBmaps, useBumpMaps);
 		glUniform3fv(UcameraPosition, 1, &eng->scene->m_Camera.position[0]);
 		glUniform4fv(Ulvec, 1, &eng->scene->m_Light[0]);
+		glUniform1f(UambLightBlend, ambientLightBlend);
+		glUniform1f(UaoStrength, aoStrength);
+		glUniform1f(UreflStr, reflectionStrength);
+		glUniform2fv(Uresolution, 1, &resolution[0]);
+
+
 		for (auto m : eng->scene->meshes) {
 			glUniformMatrix4fv(Umodmat, 1, GL_FALSE, &m->modelMatrix[0][0]);
 			glm::mat4 MVP = eng->scene->m_Camera.VP * m->modelMatrix;
 			glUniformMatrix4fv(Umvp, 1, GL_FALSE, &MVP[0][0]);
-			glm::mat3 nMat = glm::mat3(glm::inverse(glm::transpose(m->modelMatrix)));
+			glm::mat3 nMat = glm::transpose(glm::inverse(glm::mat3(m->modelMatrix)));
 			glUniformMatrix3fv(Unmat, 1, GL_FALSE, &nMat[0][0]);
-			m->material->setUniforms(shader);
+			m->material->setUniforms(shader, useModelNormals);
 
 			// Bind textures:
 			for (int i = 0; i < aiTextureType_UNKNOWN; ++i){
@@ -72,6 +84,16 @@ namespace TDModelView
 					glBindTexture(GL_TEXTURE_2D, hdr_tx->id);
 				}
 			}
+			glActiveTexture(GL_TEXTURE18);// bind brdf pre-calc'd lut
+			glBindTexture(GL_TEXTURE_2D, lut_tx->id);
+			
+			glActiveTexture(GL_TEXTURE19);
+			glBindTexture(GL_TEXTURE_2D, hdr_irradiance_tx->id);
+
+			glActiveTexture(GL_TEXTURE20);
+			glBindTexture(GL_TEXTURE_2D, hdr_prefilt_tx->id);
+
+
 			
 			m->DrawElements(eng->render->wireframeModeOn ? GL_LINES : GL_TRIANGLES);
 #ifdef _DEBUG

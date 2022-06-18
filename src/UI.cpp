@@ -287,10 +287,11 @@ namespace TDModelView
                 }
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Options")) {
+            if (ImGui::BeginMenu("Options")) 
+            {
                 ImGui::Checkbox("Wireframe Mode", &eng->render->wireframeModeOn);
                 if(ImGui::SliderFloat("Light Rotation", &lightRot, 0.0f, 1.0f)) {
-                    float theta = 2.0f *3.1415926536f * lightRot;
+                    float theta = 6.28318530718f * lightRot;
                     float phi = cos(2.0f * theta);
                     glm::vec3 L = (glm::vec3(cos(phi) * sin(theta), sin(phi) * sin(theta), cos(theta)));
                     eng->scene->m_Light.x = L.x;
@@ -302,10 +303,36 @@ namespace TDModelView
                     eng->scene->m_Camera.position = eng->scene->bbox.center();
                     eng->scene->m_Camera.Update();
                 }
+                ImGui::SliderFloat("Camera Speed", &eng->scene->m_Camera.movementSpeed, 0.0f, 20.0f);
+                if (ImGui::Checkbox("Cull Backfaces", &eng->render->cullBackfaces))
+                {
+                    if (eng->render->cullBackfaces)
+                        glEnable(GL_CULL_FACE);
+                    else
+                        glDisable(GL_CULL_FACE);
+                }
+                ImGui::Checkbox("Use Model Normals", &eng->render->useModelNormals);
+                if(!eng->render->useModelNormals)
+                    ImGui::Checkbox("Use Bump Maps", &eng->render->useBumpMaps);
+                ImGui::SliderFloat("Ambient Light Blend", &eng->render->ambientLightBlend, 0.0f, 10.0f);
+                ImGui::SliderFloat("Ambient Occlusion Strength", &eng->render->aoStrength, 0.0f, 1.0f);
+                ImGui::SliderFloat("Reflection Strength", &eng->render->reflectionStrength, 0.0f, 10.0f);
+
+
                 ImGui::EndMenu();
             }
-
-
+            if (ImGui::BeginMenu("Details"))
+            {
+                static auto& io = ImGui::GetIO();
+                std::string str = "FPS: " + std::to_string(1.0f/io.DeltaTime);
+                ImGui::Text(str.c_str());
+                str = "# tris: " + std::to_string(eng->scene->triCount);
+                ImGui::Text(str.c_str());
+                str = "# verts: " + std::to_string(eng->scene->vertexCount);
+                ImGui::Text(str.c_str());
+                ImGui::EndMenu();
+            }
+            
             ImGui::EndMainMenuBar();
         }
     }
