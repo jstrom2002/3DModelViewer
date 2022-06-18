@@ -122,6 +122,7 @@ namespace TDModelView
 
         static glm::vec3 rot;
         rot = eng->scene->m_Camera.angles + 0.1f * glm::radians(glm::vec3(deltaY, deltaX, 0.0f));
+        rot.z = 0.0;
         if (eng->ui->mouseLook) { 
             eng->scene->m_Camera.Rotate(rot);
         }
