@@ -20,7 +20,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include "UI.hpp"
 #include <assimp/material.h>
-#include "tinyddsloader_impl.h"
+#include "nv_dds.h"
 
 namespace TDModelView
 {
@@ -94,22 +94,180 @@ namespace TDModelView
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
 
+		void loadDDS(std::string path) {
+			nv_dds::CDDSImage image;
+			nv_dds::CSurface surf;
+
+			try
+			{
+				bool flipImage = false;
+				image.load(path, flipImage);
+			}
+			catch (std::exception e1)
+			{
+				ErrorMessageBox(e1.what());
+				return;
+			}
+
+			int w = image.get_width();
+			int h = image.get_height();
+			int d = image.get_depth();
+			int type = -1;
+			GLuint totalBytes = image.get_size();
+			GLuint internalFormat = image.get_format();
+			if (image.get_num_mipmaps() > 1) {
+				surf = image.get_mipmap(0);
+				w = surf.get_width();
+				h = surf.get_height();
+				d = surf.get_depth();
+				totalBytes = surf.get_size();
+			}
+
+			if (image.get_type() == nv_dds::TextureType::TextureFlat)
+				type = GL_TEXTURE_2D;
+
+			// Convert 'nv_dds' formatting from using swapped channel formats to something OpenGL can handle.
+			switch (internalFormat) {
+			case GL_BGRA_EXT:
+				internalFormat = GL_RGBA;
+				break;
+			case GL_BGR_EXT:
+				internalFormat = GL_RGB;
+				break;
+			case GL_LUMINANCE:
+				internalFormat = GL_RED;
+				break;
+			}
+
+			int format = internalFormat;
+			switch (d) {
+			case 1:
+				format = GL_RED;
+				break;
+			case 2:
+				ErrorMessageBox("ERROR! Cannot load 2 channel .dds files.");
+				break;
+			case 3:
+				format = GL_RGB;
+				break;
+			case 4:
+				format = GL_RGBA;
+				break;
+			};
+
+			bool isCompressed = false;			
+			switch (internalFormat) {
+			case GL_COMPRESSED_RED:
+			case GL_COMPRESSED_RG:
+			case GL_COMPRESSED_RGB:
+			case GL_COMPRESSED_RGBA:
+			case GL_COMPRESSED_RGB_S3TC_DXT1_EXT:
+			case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
+			case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
+			case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
+			case GL_COMPRESSED_RED_RGTC1_EXT:
+			case GL_COMPRESSED_SIGNED_RED_RGTC1_EXT:
+			case GL_COMPRESSED_RED_GREEN_RGTC2_EXT:
+			case GL_COMPRESSED_SIGNED_RED_GREEN_RGTC2_EXT:
+			case GL_COMPRESSED_RGB_FXT1_3DFX:
+			case GL_COMPRESSED_RGBA_FXT1_3DFX:
+			case GL_COMPRESSED_RGB8_ETC2:
+			case GL_COMPRESSED_SRGB8_ETC2:
+			case GL_COMPRESSED_ALPHA:
+			case GL_COMPRESSED_INTENSITY:
+			case GL_COMPRESSED_LUMINANCE:
+			case GL_COMPRESSED_SRGB_ALPHA:
+			case GL_COMPRESSED_SRGB:
+			case GL_COMPRESSED_SRGB_S3TC_DXT1_EXT:
+			case GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT:
+			case GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT:
+			case GL_COMPRESSED_RGBA_BPTC_UNORM:
+			case GL_COMPRESSED_RGBA8_ETC2_EAC:
+			case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT:
+			case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT:
+			case GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT:
+			case GL_COMPRESSED_RGBA_ASTC_4x4_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_5x4_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_5x5_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_6x5_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_6x6_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_8x5_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_8x6_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_8x8_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_10x5_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_10x6_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_10x8_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_10x10_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_12x10_KHR:
+			case GL_COMPRESSED_RGBA_ASTC_12x12_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR:
+			case GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
+				isCompressed = true;
+			}			
+
+			int dataType = GL_UNSIGNED_BYTE;
+			uint8_t* data = new uint8_t[totalBytes];
+			unsigned int byte_counter = 0;
+			switch (type)
+			{
+			case GL_TEXTURE_2D:
+				if (image.get_num_mipmaps() > 1)
+					memcpy(data, surf, surf.get_size());
+				else
+					memcpy(data, image, image.get_size());
+				break;
+			case GL_TEXTURE_CUBE_MAP:
+			case GL_TEXTURE_3D:
+			case -1:
+				ErrorMessageBox("ERROR! Cannot load non-2D DDS files.");
+			}
+
+			glPixelStorei(GL_PACK_ALIGNMENT, 1);
+			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+			if (this->id)
+				glDeleteTextures(1, &this->id);
+			glGenTextures(1, &this->id);
+			glBindTexture(GL_TEXTURE_2D, id);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			if (isCompressed)
+				glCompressedTexImage2D(GL_TEXTURE_2D, 0, internalFormat, w, h, 0, totalBytes, &data[0]);
+			else
+				glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, w, h, 0, format, dataType, &data[0]);
+			glGenerateMipmap(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+
+			delete[] data;
+			image.clear();
+		}
+
 		Texture(std::string filename, std::string dir) {
 			this->filepath = checkFilepath(filename, dir);
-			std::string ext = getExtension(this->filepath);			
+			std::string ext = getExtension(this->filepath);
 			if (ext != ".dds" && !std::filesystem::is_regular_file(filepath)) {
 				ErrorMessageBox("ERROR! Could not load texture " + filepath);
 				return;
 			}
 			else if (ext == ".dds")
 			{
-				tinyddsloader::DDSFile dds;
-				auto ret = dds.Load(filepath.c_str());
-				glGenTextures(1, &id);
-				if (tinyddsloader::Result::Success != ret || !tinyDDS::LoadGLTexture(id, dds)) {
-					glDeleteTextures(1, &id);
-					ErrorMessageBox("Failed to load .dds file " + filepath);
-				}
+				loadDDS(filepath);
 				return;
 			}
 
